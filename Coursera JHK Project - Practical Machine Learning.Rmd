@@ -1,0 +1,94 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+#  Course Project - Practical Machine Learning
+## Questions
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+###Data
+
+The training data for this project are available here:   https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:   https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment.
+
+###Goal
+
+The goal of your project is to predict the manner in which they did the exercise. This is the ¡°classe¡± variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+## Model Building
+### 1.Basic setting
+Load the data.
+```{r, results='hide', cache=TRUE}
+data_training <- read.csv('pml-training.csv',sep = ",",header = T,na.strings=c("NA","#DIV/0!",""))
+data_testing <- read.csv('pml-testing.csv',sep = ",",header = T,na.strings=c("NA","#DIV/0!",""))
+data_training <- data_training[c(-1)]
+data_testing <- data_testing[c(-1)]
+```
+Then delete variables with too much "NA" within (> 50%).
+```{r, results='hide', cache=TRUE}
+judge_factor <- rep(0,ncol(data_training)-1)
+for(i in 1:(ncol(data_training)-1)){
+        if(sum(is.na(data_training[,i]))/nrow(data_training) >= 0.5){
+                judge_factor[i] <- 1
+        }
+}
+id <- which(judge_factor == 0)
+id <- c(id, ncol(data_training))
+data_training <- data_training[, id]
+data_testing <- data_testing[, id]
+```
+Split the dataset into the training set and the cv set.
+```{r, results = 'hide', cache=TRUE}
+library(caret)
+inTrain <- createDataPartition(data_training$classe, p=0.6, list=FALSE)
+data_train <- data_training[inTrain,]
+data_cv <- data_training[-inTrain,]
+```
+
+### 2.Training
+Choose the following method to train the algorithm:  
+- CART(method = "rpart");  
+- Linear Discriminant Analysis(method = "lda");  
+- Stochastic Gradient Boosting(method = "gbm").
+```{r, results='hide', cache=TRUE, warning=F}
+set.seed(12345)
+times0 <- Sys.time()
+modelFit1 <- train(classe~., data=data_train, method="rpart")
+times1 <- Sys.time()
+modelFit2 <- train(classe~., data=data_train, method="lda")
+times2 <- Sys.time()
+modelFit3 <- train(classe~., data=data_train, method="gbm")
+times3 <- Sys.time()
+```
+
+### 3.Evaluating the prediction accuracy and the time used for the training
+```{r, cache=TRUE}
+prediction1 <- predict(modelFit1, newdata = data_cv, type = "raw")
+prediction2 <- predict(modelFit2, newdata = data_cv, type = "raw")
+prediction3 <- predict(modelFit3, newdata = data_cv, type = "raw")
+confusionMatrix(prediction1, data_cv$classe)
+confusionMatrix(prediction2, data_cv$classe)
+confusionMatrix(prediction3, data_cv$classe)
+ep1 <- difftime(times1, times0, units = "hour")
+ep2 <- difftime(times2, times1, units = "hour")
+ep3 <- difftime(times3, times2, units = "hour")
+c(ep1, ep2, ep3)
+```
+Comparing the accuracy and time used, Linear Discriminant Analysis would be the best choice here. But in the predicting process after, three methods will all be used as reference.
+
+### 4. Predict
+```{r, cache = TRUE}
+prediction_test1 <- predict(modelFit1, newdata = data_testing, type = "raw")
+prediction_test2 <- predict(modelFit2, newdata = data_testing, type = "raw")
+prediction_test3 <- predict(modelFit3, newdata = data_testing, type = "raw")
+prediction_test <- cbind(prediction_test1, prediction_test2, prediction_test3)
+prediction_test
+```
+According to the quiz results, the 2nd and the 8th predictions are wrong used the LDA method. So, the results are acceptable. Also, we can note that Stochastic Gradient Boosting method gives all right predictions, indicating that balancing the accuracy and the time used for training is hard.
